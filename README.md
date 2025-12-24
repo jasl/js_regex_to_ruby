@@ -69,6 +69,25 @@ JsRegexToRuby.try_convert("/(?invalid/")    #=> nil
 JsRegexToRuby.try_convert(nil)              #=> nil
 ```
 
+#### `literal_only` Option
+
+By default, strings without `/` delimiters are treated as raw pattern sources:
+
+```ruby
+JsRegexToRuby.try_convert("cat")  #=> /cat/ (compiled as pattern)
+```
+
+If you only want to accept JS regex literals (strings starting with `/`), use `literal_only: true`:
+
+```ruby
+# Only accept /pattern/flags format
+JsRegexToRuby.try_convert("cat", literal_only: true)   #=> nil (not a literal)
+JsRegexToRuby.try_convert("/cat/", literal_only: true) #=> /cat/
+JsRegexToRuby.try_convert("/cat/i", literal_only: true) #=> /cat/i
+```
+
+This is useful when you want to distinguish between plain strings (like keywords) and regex patterns in user input.
+
 ### Parsing JS Literal Without Converting
 
 ```ruby

@@ -1,3 +1,8 @@
+# Interface for objects that respond to #to_s
+interface _ToS
+  def to_s: () -> String
+end
+
 module JsRegexToRuby
   VERSION: String
 
@@ -5,7 +10,9 @@ module JsRegexToRuby
   def self.convert: (String input, ?flags: String?, ?compile: bool) -> Result
 
   # Try to convert a JS regex to Ruby Regexp, returns nil on failure
-  def self.try_convert: (String input, ?flags: String?) -> Regexp?
+  # - When literal_only: false (default), only String inputs are processed; non-strings return nil
+  # - When literal_only: true, input is converted via #to_s; returns nil if not starting with "/"
+  def self.try_convert: (String | _ToS input, ?flags: String?, ?literal_only: bool) -> Regexp?
 
   # Parse a JS regex literal into pattern and flags
   def self.parse_literal: (String literal) -> [String, String]
