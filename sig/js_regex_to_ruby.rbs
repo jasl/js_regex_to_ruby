@@ -1,0 +1,64 @@
+module JsRegexToRuby
+  VERSION: String
+
+  # Convenience API to convert a JS regex to Ruby
+  def self.convert: (String input, ?flags: String?, ?compile: bool) -> Result
+
+  # Try to convert a JS regex to Ruby Regexp, returns nil on failure
+  def self.try_convert: (String input, ?flags: String?) -> Regexp?
+
+  # Parse a JS regex literal into pattern and flags
+  def self.parse_literal: (String literal) -> [String, String]
+
+  # Conversion result containing Ruby regex and metadata
+  class Result
+    attr_accessor ruby_source: String
+    attr_accessor ruby_options: Integer
+    attr_accessor regexp: Regexp?
+    attr_accessor warnings: Array[String]
+    attr_accessor ignored_js_flags: Array[String]
+    attr_accessor js_source: String
+    attr_accessor js_flags: String
+
+    def initialize: (
+      ruby_source: String,
+      ruby_options: Integer,
+      regexp: Regexp?,
+      warnings: Array[String],
+      ignored_js_flags: Array[String],
+      js_source: String,
+      js_flags: String
+    ) -> void
+
+    # Returns true if regexp compilation succeeded
+    def success?: () -> bool
+
+    # Returns Ruby flags as a string (e.g., "im")
+    def ruby_flags_string: () -> String
+
+    # Returns a Ruby literal representation
+    def ruby_literal: () -> String
+  end
+
+  # Converter class for JS to Ruby regex conversion
+  class Converter
+    JS_KNOWN_FLAGS: Array[String]
+    JS_GROUP_MOD_FLAGS: Array[String]
+
+    # Parse a JS regex literal like `/foo\\/bar/i`
+    def self.parse_literal: (String literal) -> [String, String]
+
+    # Convert a JS regex into a Ruby regex
+    def self.convert: (String input, ?flags: String?, ?compile: bool) -> Result
+
+    # Context for tracking modifier state during rewriting
+    class Context
+      attr_accessor js_multiline_anchors: bool?
+      attr_accessor ruby_ignorecase: bool?
+      attr_accessor ruby_dotall: bool?
+
+      def initialize: (?js_multiline_anchors: bool?, ?ruby_ignorecase: bool?, ?ruby_dotall: bool?) -> void
+      def with: (?Hash[Symbol, bool?]) -> Context
+    end
+  end
+end
