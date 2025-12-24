@@ -10,17 +10,17 @@ module JsRegexToRuby
   # Parse a JS regex literal into pattern and flags
   def self.parse_literal: (String literal) -> [String, String]
 
-  # Conversion result containing Ruby regex and metadata
-  class Result
-    attr_accessor ruby_source: String
-    attr_accessor ruby_options: Integer
-    attr_accessor regexp: Regexp?
-    attr_accessor warnings: Array[String]
-    attr_accessor ignored_js_flags: Array[String]
-    attr_accessor js_source: String
-    attr_accessor js_flags: String
+  # Conversion result (immutable value object)
+  class Result < Data
+    attr_reader ruby_source: String
+    attr_reader ruby_options: Integer
+    attr_reader regexp: Regexp?
+    attr_reader warnings: Array[String]
+    attr_reader ignored_js_flags: Array[String]
+    attr_reader js_source: String
+    attr_reader js_flags: String
 
-    def initialize: (
+    def self.new: (
       ruby_source: String,
       ruby_options: Integer,
       regexp: Regexp?,
@@ -28,7 +28,7 @@ module JsRegexToRuby
       ignored_js_flags: Array[String],
       js_source: String,
       js_flags: String
-    ) -> void
+    ) -> Result
 
     # Returns true if regexp compilation succeeded
     def success?: () -> bool
@@ -51,14 +51,14 @@ module JsRegexToRuby
     # Convert a JS regex into a Ruby regex
     def self.convert: (String input, ?flags: String?, ?compile: bool) -> Result
 
-    # Context for tracking modifier state during rewriting
-    class Context
-      attr_accessor js_multiline_anchors: bool?
-      attr_accessor ruby_ignorecase: bool?
-      attr_accessor ruby_dotall: bool?
+    # Context for tracking modifier state during rewriting (immutable)
+    class Context < Data
+      attr_reader js_multiline_anchors: bool?
+      attr_reader ruby_ignorecase: bool?
+      attr_reader ruby_dotall: bool?
 
-      def initialize: (?js_multiline_anchors: bool?, ?ruby_ignorecase: bool?, ?ruby_dotall: bool?) -> void
-      def with: (?Hash[Symbol, bool?]) -> Context
+      def self.new: (js_multiline_anchors: bool?, ruby_ignorecase: bool?, ruby_dotall: bool?) -> Context
+      def with: (?js_multiline_anchors: bool?, ?ruby_ignorecase: bool?, ?ruby_dotall: bool?) -> Context
     end
   end
 end

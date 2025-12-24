@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "js_regex_to_ruby/version"
+require_relative "js_regex_to_ruby/result"
 require_relative "js_regex_to_ruby/converter"
 
 module JsRegexToRuby

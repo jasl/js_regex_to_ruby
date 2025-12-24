@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require_relative "result"
-
 module JsRegexToRuby
   # Convert an ECMAScript-style regular expression (pattern + flags) into a Ruby Regexp.
   #
@@ -18,11 +16,8 @@ module JsRegexToRuby
     JS_KNOWN_FLAGS = %w[d g i m s u v y].freeze
     JS_GROUP_MOD_FLAGS = %w[i m s].freeze
 
-    Context = Struct.new(:js_multiline_anchors, :ruby_ignorecase, :ruby_dotall, keyword_init: true) do
-      def with(overrides = {})
-        self.class.new(**to_h.merge(overrides))
-      end
-    end
+    # Tracks modifier state during source rewriting (immutable).
+    Context = Data.define(:js_multiline_anchors, :ruby_ignorecase, :ruby_dotall)
 
     # Parse a JS regex literal like `/foo\\/bar/i`.
     # Returns [pattern, flags].
