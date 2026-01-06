@@ -12,7 +12,8 @@ JavaScript and Ruby regular expressions have subtle but important differences:
 | `/s` flag (dotAll) | Makes `.` match newlines | N/A (use `/m` in Ruby) |
 | `/m` flag (multiline) | Makes `^`/`$` match line boundaries | N/A (already default behavior) |
 | `[^]` (any character) | Matches any char including `\n` | Invalid syntax (use `[\s\S]`) |
-| `/g`, `/y`, `/d`, `/u`, `/v` flags | Various features | No direct equivalents |
+| `/g`, `/y` flags | Global / sticky runtime semantics | Supported via `JsRegexToRuby::JsRegExp` (stateful `Regexp` subclass) |
+| `/d`, `/u`, `/v` flags | Various features | No direct equivalents |
 
 This gem handles these conversions automatically, emitting warnings when perfect conversion isn't possible.
 
@@ -102,10 +103,31 @@ flags    #=> "gi"
 result = JsRegexToRuby.convert("/test/guy")
 
 result.warnings
-#=> ["JS flag(s) not representable as Ruby Regexp options: g, u, y"]
+#=> ["JS flag(s) not representable as Ruby Regexp options: u"]
 
 result.ignored_js_flags
-#=> ["g", "u", "y"]
+#=> ["u"]
+```
+
+### Global / Sticky (`g` / `y`) Runtime Semantics
+
+When the JS flags include `g` and/or `y`, `convert` returns a `JsRegexToRuby::JsRegExp` (a `Regexp` subclass) that tracks `last_index` and provides JS-like methods:
+
+```ruby
+res = JsRegexToRuby.convert("/foo/g")
+re = res.regexp
+
+re.last_index = 2
+re.exec("foo foo")&.begin(0) #=> 4
+re.last_index               #=> 7
+```
+
+For safe global iteration (avoids empty-match infinite loops), use `match_all`:
+
+```ruby
+re = JsRegexToRuby.convert("/.*/g").regexp
+re.match_all("a").map { |m| [m[0], m.begin(0)] }
+#=> [["a", 0], ["", 1]]
 ```
 
 ### Result Object
@@ -114,7 +136,7 @@ The `Result` struct provides comprehensive information:
 
 | Method | Description |
 |--------|-------------|
-| `regexp` | The compiled `Regexp` object (or `nil` if compilation failed) |
+| `regexp` | The compiled `Regexp` object (or `JsRegexToRuby::JsRegExp` when `g`/`y` are present), or `nil` if compilation failed |
 | `success?` | Returns `true` if `regexp` is not `nil` |
 | `ruby_source` | The converted Ruby regex pattern string |
 | `ruby_options` | Integer flags (`Regexp::IGNORECASE`, `Regexp::MULTILINE`, etc.) |
@@ -144,8 +166,8 @@ result.regexp       #=> nil
 | `i` | `Regexp::IGNORECASE` | Case-insensitive matching |
 | `s` | `Regexp::MULTILINE` | JS dotAll → Ruby multiline (`.` matches `\n`) |
 | `m` | *(behavior change)* | Keeps `^`/`$` as-is instead of converting to `\A`/`\z` |
-| `g` | *(ignored)* | Global matching - handle in application code |
-| `y` | *(ignored)* | Sticky matching - no equivalent |
+| `g` | `JsRegexToRuby::JsRegExp` | JS-like `lastIndex`/`exec`/`test` behavior (not a Ruby Regexp option) |
+| `y` | `\G` + `JsRegexToRuby::JsRegExp` | Sticky matching via `\G` prefix + `lastIndex` runtime behavior |
 | `u` | *(ignored)* | Unicode mode - Ruby handles Unicode differently |
 | `v` | *(ignored)* | Unicode sets mode - no equivalent |
 | `d` | *(ignored)* | Indices for matches - no equivalent |
@@ -197,9 +219,15 @@ result.regexp.match?("axb")   #=> true
 
 Note: Negated character classes like `[^abc]` are NOT affected and work as expected.
 
+### Ruby-Only Escape Sequences
+
+JavaScript allows many "identity escapes" where `\X` means `"X"` (outside Unicode modes).
+Ruby has additional special sequences like `\A`, `\z`, `\G`, and `\Q...\E`.
+To preserve JS behavior, the converter rewrites these to literal characters where appropriate (e.g., JS `\A` becomes Ruby `A`).
+
 ## Limitations
 
-1. **No runtime flags**: JS flags like `g` (global) and `y` (sticky) affect matching behavior at runtime and have no Ruby `Regexp` equivalent. Handle these in your application logic.
+1. **Runtime flags (`g`, `y`) are stateful**: When present, `convert` returns a `JsRegexToRuby::JsRegExp` (subclass of `Regexp`) that tracks `last_index` and provides JS-like `exec`/`test`/`match` behavior. Use `match_all` for safe iteration. Note: `String#match?`, `String#scan`, and `String#=~` bypass `Regexp` method dispatch and will not update `last_index`.
 
 2. **Unicode properties**: `\p{...}` syntax exists in both JS and Ruby but with different property names and semantics. No automatic conversion is performed.
 

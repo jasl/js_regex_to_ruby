@@ -9,12 +9,18 @@ module JsRegexToRuby
   # - JS /s (dotAll) => Ruby /m (dot-all in Ruby)
   # - JS /m (multiline anchors) => Ruby has ^/$ multiline by default, so we rewrite ^/$
   #   to \A/\z when JS multiline is NOT enabled.
+  # - JS /y (sticky) => Ruby \G prefix (requires runtime lastIndex management for full fidelity)
   # - JS inline modifiers (?ims-ims:...) are supported, with mapping s->m and special handling for m.
   # - JS [^] (match any character including newline) => Ruby [\s\S]
-  # - JS /g, /y, /u, /v, /d have no direct Regexp equivalent; we report them in Result#ignored_js_flags.
+  # - JS /g and /y are supported via JsRegexToRuby::JsRegExp runtime semantics (last_index).
+  # - JS /u, /v, /d have no direct Regexp equivalent; we report them in Result#ignored_js_flags.
   class Converter
     JS_KNOWN_FLAGS = %w[d g i m s u v y].freeze
     JS_GROUP_MOD_FLAGS = %w[i m s].freeze
+
+    # Ruby has additional backslash escapes that JavaScript treats as identity escapes (i.e., \X == "X").
+    # To preserve JS behavior, we drop the backslash for these sequences during rewriting.
+    RUBY_IDENTITY_ESCAPE_CHARS = %w[A Z z G K Q E R X h H a e C M].freeze
 
     # Tracks modifier state during source rewriting (immutable).
     Context = Data.define(:js_multiline_anchors, :ruby_ignorecase, :ruby_dotall)
@@ -86,7 +92,10 @@ module JsRegexToRuby
       warnings << "Unknown JS RegExp flag(s): #{unknown_flags.uniq.join(', ')}" unless unknown_flags.empty?
       warnings << "Duplicate JS RegExp flag(s) ignored: #{duplicate_flags.uniq.join(', ')}" unless duplicate_flags.empty?
 
-      ignored_js_flags = (seen_flags.keys - %w[i m s]).sort
+      # Flags that remain unhandled in the conversion output.
+      handled_js_flags = %w[i m s y]
+      handled_js_flags << "g" if compile
+      ignored_js_flags = (seen_flags.keys - handled_js_flags).sort
 
       unless ignored_js_flags.empty?
         warnings << "JS flag(s) not representable as Ruby Regexp options: #{ignored_js_flags.join(', ')}"
@@ -95,6 +104,8 @@ module JsRegexToRuby
       base_js_multiline = seen_flags["m"]
       base_js_ignorecase = seen_flags["i"]
       base_js_dotall = seen_flags["s"]
+      base_js_global = seen_flags["g"]
+      base_js_sticky = seen_flags["y"]
 
       ruby_options = 0
       ruby_options |= Regexp::IGNORECASE if base_js_ignorecase
@@ -107,11 +118,17 @@ module JsRegexToRuby
       )
 
       ruby_source = rewrite_source(js_source, base_ctx, warnings)
+      ruby_source = "\\G(?:#{ruby_source})" if base_js_sticky
 
       regexp = nil
       if compile
         begin
-          regexp = Regexp.new(ruby_source, ruby_options)
+          regexp =
+            if base_js_global || base_js_sticky
+              JsRegExp.new(ruby_source, ruby_options, js_flags: js_flags)
+            else
+              Regexp.new(ruby_source, ruby_options)
+            end
         rescue RegexpError => e
           warnings << "Ruby RegexpError: #{e.message}"
           regexp = nil
@@ -178,12 +195,18 @@ module JsRegexToRuby
               next
             end
 
-            out << ch
-            if i + 1 < src.length
-              out << src[i + 1]
+            next_ch = src[i + 1]
+            if next_ch && ruby_identity_escape_char?(next_ch)
+              out << next_ch
               i += 2
             else
-              i += 1
+              out << ch
+              if next_ch
+                out << next_ch
+                i += 2
+              else
+                i += 1
+              end
             end
             next
           end
@@ -200,12 +223,18 @@ module JsRegexToRuby
             out << control_char(src[i + 2])
             i += 3
           else
-            out << ch
-            if i + 1 < src.length
-              out << src[i + 1]
+            next_ch = src[i + 1]
+            if next_ch && ruby_identity_escape_char?(next_ch)
+              out << next_ch
               i += 2
             else
-              i += 1
+              out << ch
+              if next_ch
+                out << next_ch
+                i += 2
+              else
+                i += 1
+              end
             end
           end
 
@@ -375,9 +404,13 @@ module JsRegexToRuby
       end
     end
 
+    def self.ruby_identity_escape_char?(ch)
+      RUBY_IDENTITY_ESCAPE_CHARS.include?(ch)
+    end
+
     private_class_method :looks_like_literal?, :normalize_flags,
                          :rewrite_source, :control_escape_at?, :control_char,
                          :parse_js_modifier_group, :apply_js_group_modifiers,
-                         :build_ruby_modifier_prefix
+                         :build_ruby_modifier_prefix, :ruby_identity_escape_char?
   end
 end

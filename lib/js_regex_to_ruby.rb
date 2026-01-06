@@ -2,6 +2,7 @@
 
 require_relative "js_regex_to_ruby/version"
 require_relative "js_regex_to_ruby/result"
+require_relative "js_regex_to_ruby/js_regexp"
 require_relative "js_regex_to_ruby/converter"
 
 module JsRegexToRuby
